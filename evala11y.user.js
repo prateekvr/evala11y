@@ -394,8 +394,17 @@
 
     // Clear overlays
     function clearOverlays() {
-        document.querySelectorAll('.evala11y-highlight, .evala11y-badge').forEach(el => {
+        document.querySelectorAll('.evala11y-highlight').forEach(el => {
             el.classList.remove('evala11y-highlight');
+            // Remove stored event handlers
+            if (el._evala11yEnterHandler) {
+                el.removeEventListener('mouseenter', el._evala11yEnterHandler);
+                delete el._evala11yEnterHandler;
+            }
+            if (el._evala11yLeaveHandler) {
+                el.removeEventListener('mouseleave', el._evala11yLeaveHandler);
+                delete el._evala11yLeaveHandler;
+            }
         });
         document.querySelectorAll('.evala11y-badge').forEach(el => el.remove());
         const tooltip = document.getElementById('evala11y-tooltip');
@@ -407,6 +416,11 @@
         if (!state.overlaysVisible) return;
         state.issues.forEach(issue => {
             if (!issue.element || issue.element === document.body) return;
+            
+            // Skip visual overlay for contrast issues to reduce clutter
+            // Contrast issues are still detected and listed in the side panel
+            if (issue.category === 'Contrast') return;
+            
             const el = issue.element;
             el.classList.add('evala11y-highlight');
             el.style.setProperty('--evala11y-color', CONFIG.COLORS[issue.severity]);
@@ -418,9 +432,15 @@
             badge.textContent = issue.category.charAt(0);
             badge.dataset.issueId = issue.id;
             
-            // Tooltip events
+            // Tooltip events on badge
             badge.onmouseenter = (e) => showTooltip(e, issue);
             badge.onmouseleave = hideTooltip;
+            
+            // Store handlers for cleanup and add tooltip events on highlighted element
+            el._evala11yEnterHandler = (e) => showTooltip(e, issue);
+            el._evala11yLeaveHandler = hideTooltip;
+            el.addEventListener('mouseenter', el._evala11yEnterHandler);
+            el.addEventListener('mouseleave', el._evala11yLeaveHandler);
             
             if (getComputedStyle(el).position === 'static') {
                 el.style.position = 'relative';
@@ -429,7 +449,7 @@
         });
     }
 
-    // Show tooltip
+    // Show tooltip with exact issue details
     function showTooltip(event, issue) {
         let tooltip = document.getElementById('evala11y-tooltip');
         if (!tooltip) {
@@ -438,10 +458,18 @@
             tooltip.className = 'evala11y-tooltip';
             document.body.appendChild(tooltip);
         }
+        
+        // Format severity for display
+        const severityLabel = issue.severity.charAt(0).toUpperCase() + issue.severity.slice(1);
+        
         tooltip.innerHTML = `
-            <div class="evala11y-tooltip-title" style="color: ${CONFIG.COLORS[issue.severity]}">${issue.title}</div>
-            <div class="evala11y-tooltip-desc">${issue.description}</div>
-            <div style="margin-top: 8px; font-size: 11px; opacity: 0.7">${issue.wcag}</div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="font-size: 11px; text-transform: uppercase; opacity: 0.7;">${issue.category}</span>
+                <span style="font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; background: ${CONFIG.COLORS[issue.severity]}; color: white;">${severityLabel}</span>
+            </div>
+            <div class="evala11y-tooltip-title" style="color: ${CONFIG.COLORS[issue.severity]}; margin-bottom: 6px;">${issue.title}</div>
+            <div class="evala11y-tooltip-desc" style="margin-bottom: 8px;">${issue.description}</div>
+            <div style="font-size: 11px; opacity: 0.7; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 8px;">${issue.wcag}</div>
         `;
         tooltip.style.left = (event.pageX + 10) + 'px';
         tooltip.style.top = (event.pageY + 10) + 'px';
